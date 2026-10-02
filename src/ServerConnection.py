@@ -65,7 +65,10 @@ class TelemetryData:
         self.iha_yatis = 0
         self.iha_hiz = 0
         self.iha_batarya = 0
-        self.iha_otonom = 1
+        # İlk heartbeat gelene kadar uçuş modu BİLİNMİYOR. Eskiden 1'di ve
+        # sunucuya İHA'dan önce bağlanıldığında ilk paketler asılsız yere
+        # "otonom" gidiyordu; bilinmeyeni iddia etmemek için 0.
+        self.iha_otonom = 0
         self.iha_kilitlenme = 0
         self.hedef_merkez_X = 0
         self.hedef_merkez_Y = 0

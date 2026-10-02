@@ -24,7 +24,8 @@ class HSSPollingWorker(QObject):
         self._seq: int = 0
         self._last_zones: list[ServerAdsData] = []
         qDebug("HSS polling timer configured to %s ms" % interval_ms)
-        self.timer = QTimer(self, interval=interval_ms)
+        self.timer = QTimer(self)
+        self.timer.setInterval(interval_ms)
         self.timer.timeout.connect(self._poll)
 
     def run(self) -> None:

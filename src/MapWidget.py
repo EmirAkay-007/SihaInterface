@@ -535,7 +535,8 @@ class MapWidget(QQuickWidget):
         self.server_ads_data_model = AdsDataModel()
         self.user_ads_data_model = AdsDataModel()
         self.target_coord = RepositionTargetHolder(self)
-        self.reposition_timer = QTimer(self, singleShot=True, interval=2000)
+        self.reposition_timer = QTimer(self, singleShot=True)
+        self.reposition_timer.setInterval(2000)
 
         self.buffer_zone_data_model = AdsDataModel()
         self.avoidance_route_geopath = MissionPathHolder(self)

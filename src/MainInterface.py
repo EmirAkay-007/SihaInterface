@@ -9,7 +9,8 @@ from functools import partial
 
 from src.CameraWidget import CameraServerProtocol
 from src.CommonUtils import TrackableDataPacketTimer, main_and_sub_mode_to_px4_uav_mode, MSG_ID_2_TRACKABLE_DATA_TYPE, \
-    PX4_UAV_Modes, KamikazeState, index_to_px4_uav_mode, SupportedLanguages, Ardupilot_UAV_Modes, HssSnapshot
+    PX4_UAV_Modes, KamikazeState, index_to_px4_uav_mode, SupportedLanguages, Ardupilot_UAV_Modes, HssSnapshot, \
+    ARDUPILOT_AUTONOMOUS_MODES, PX4_AUTONOMOUS_MAIN_MODES
 
 os.environ['MAVLINK20'] = '1'
 
@@ -33,7 +34,7 @@ from pymavlink.dialects.v20.all import MAVLink_gps_raw_int_message, MAVLink_atti
     MAV_MISSION_ACCEPTED, MAVLINK_MSG_ID_MISSION_ITEM, MAVLink_mission_item_message, MAV_MODE_FLAG_SAFETY_ARMED, \
     MAV_CMD_COMPONENT_ARM_DISARM, MAV_AUTOPILOT_INVALID, MAV_DATA_STREAM_ALL, \
     MAV_CMD_SET_MESSAGE_INTERVAL, MAV_MISSION_TYPE_MISSION, MAV_RESULT_TEMPORARILY_REJECTED, MAV_CMD_DO_SET_MODE, \
-    MAV_MODE_FLAG_AUTO_ENABLED, MAV_AUTOPILOT_PX4, MAV_AUTOPILOT_ARDUPILOTMEGA, MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, \
+    MAV_AUTOPILOT_PX4, MAV_AUTOPILOT_ARDUPILOTMEGA, MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, \
     MAV_RESULT_FAILED, MAV_RESULT_ACCEPTED, MAV_CMD_REQUEST_MESSAGE, MAVLINK_MSG_ID_MISSION_CURRENT, MAV_TYPE_GCS, \
     MAVLINK_MSG_ID_PARAM_VALUE, MAVLINK_MSG_ID_HEARTBEAT
 from pymavlink.mavutil import mavfile, all_printable, mavtcp, mavudp, mavserial
@@ -213,7 +214,11 @@ class TrackableDataUpdate:
 
     @staticmethod
     def update_fly_mode(worker_signals: MavlinkWorkerSignals, telemetry: TelemetryData, packet: MAVLink_heartbeat_message) -> str:
-        telemetry.iha_otonom = 1 if (packet.base_mode & MAV_MODE_FLAG_AUTO_ENABLED) != 0 else 0
+        # iha_otonom aşağıda, mod ÇÖZÜLDÜKTEN sonra custom_mode'dan yazılıyor;
+        # base_mode bayrakları bunun için kullanılamıyor (gerekçe:
+        # CommonUtils.ARDUPILOT_AUTONOMOUS_MODES). Mod çözülemezse bayrak son
+        # bilinen değerinde kalır -- bilmediğimiz bir modu "manuel" diye
+        # bildirmek, telemetriyi sessizce yanlışlamak olurdu.
         worker_signals.change_autopilot.emit(packet.autopilot)
         if packet.autopilot == MAV_AUTOPILOT_PX4:
             sub_mod = packet.custom_mode >> 24
@@ -223,6 +228,7 @@ class TrackableDataUpdate:
                 sub = px4mode.get(sub_mod)
                 if sub:
                     index: int = sub.value[0]
+                    telemetry.iha_otonom = 1 if sub.value[2] in PX4_AUTONOMOUS_MAIN_MODES else 0
                     worker_signals.set_fly_mode.emit(index)
                 else:
                     qWarning("Can not handle px4 sub mode %s %s %s" % (packet.custom_mode, base_mod, sub_mod))
@@ -231,6 +237,7 @@ class TrackableDataUpdate:
         elif packet.autopilot == MAV_AUTOPILOT_ARDUPILOTMEGA:
             index: int = packet.custom_mode
             if 27 > index >= 0:
+                telemetry.iha_otonom = 1 if index in ARDUPILOT_AUTONOMOUS_MODES else 0
                 worker_signals.set_fly_mode.emit(index)
                 if packet.custom_mode != 15:
                     worker_signals.should_reposition_removed.emit()
@@ -605,11 +612,11 @@ class MavlinkWorker(QObject):
             elif msgID == MAVLINK_MSG_ID_HEARTBEAT and not self.mavlink_connection.probably_vehicle_heartbeat(packet):
                 # Otopilot dışı bir düğümün heartbeat'i (ADS-B modülü vb.).
                 # Aracın mod/arm durumunu sürmesin: araçtaki ADS-B modülü de
-                # 1 Hz heartbeat yayınlıyor ve base_mode'u SABİT 4, yani
-                # MAV_MODE_FLAG_AUTO_ENABLED açık. Süzülmezse update_fly_mode
-                # iha_otonom'u araç manuel uçarken bile 1 yapar; aynı pakette
-                # SAFETY_ARMED kapalı olduğu için update_arm_status da arm
-                # göstergesini saniyede bir "disarmed"a düşürür.
+                # 1 Hz heartbeat yayınlıyor ama custom_mode'u aracın uçuş modu
+                # DEĞİL. Süzülmezse update_fly_mode mod kutusunu ve iha_otonom'u
+                # o düğümün alanından yazar; aynı pakette SAFETY_ARMED kapalı
+                # olduğu için update_arm_status da arm göstergesini saniyede bir
+                # "disarmed"a düşürür.
                 pass
             elif msgID in MSG_ID_2_TRACKABLE_DATA_TYPE:
                 e = MSG_ID_2_TRACKABLE_DATA_TYPE[msgID]
@@ -641,11 +648,11 @@ class ConnectionWaitWrapper(QObject):
         try:
             match self.uav_connection.connection_type:
               case ConnectionType.TCP:
-                  self.mavlink_connection = mavtcp(self.uav_connection.ip, retries=1)
+                  self.mavlink_connection = mavtcp(self.uav_connection.ip, retries=1, source_system=254, source_component=190)
               case ConnectionType.UDP:
-                  self.mavlink_connection = mavudp(self.uav_connection.ip, timeout=10)
+                  self.mavlink_connection = mavudp(self.uav_connection.ip, timeout=10, source_system=254, source_component=190)
               case ConnectionType.SERIAL:
-                  self.mavlink_connection = mavserial(self.uav_connection.serial_port, baud=self.uav_connection.serial_baud_rate)
+                  self.mavlink_connection = mavserial(self.uav_connection.serial_port, baud=self.uav_connection.serial_baud_rate, source_system=254, source_component=190)
               case None:
                   self.mavlink_connection_error.emit()
                   qWarning("Connection type is null ???")
@@ -734,7 +741,8 @@ class TimerHoldFixedValue(QTimer):
     """
 
     def __init__(self, parent: QObject, hold_ms: int = 2000):
-        super().__init__(parent, singleShot=True, interval=hold_ms)
+        super().__init__(parent, singleShot=True)
+        self.setInterval(hold_ms)
 
     def hold(self) -> None:
         """Operatör kutuya dokundu; bekleme penceresini baştan başlat."""
@@ -764,7 +772,8 @@ class MainWindow(QMainWindow):
     mavlink_thread: QThread | None = None
     next_telemetry: TelemetryData = TelemetryData()
     last_server_telemetry_response: TelemetryResponseData = TelemetryResponseData()
-    plane_on_map_update_timer: QTimer = QTimer(interval=500)
+    plane_on_map_update_timer: QTimer = QTimer()
+    plane_on_map_update_timer.setInterval(500)
     current_lang: int
     current_pilot: int
     _hss_polling_worker: HSSPollingWorker | None = None
@@ -834,7 +843,8 @@ class MainWindow(QMainWindow):
         self.kamikaze_dive_start_alt = 0.0
         self.kamikaze_dive_duration = 0.0
         self._kamikaze_climb_warned = False
-        self._kamikaze_target_cooldown = QTimer(self, singleShot=True, interval=KAMIKAZE_TARGET_REFRESH)
+        self._kamikaze_target_cooldown = QTimer(self, singleShot=True)
+        self._kamikaze_target_cooldown.setInterval(KAMIKAZE_TARGET_REFRESH)
         self.waits_for_qr = False
         # Sunucuya giden başlangıç/bitiş zamanları dalışa göre yakalanıyor:
         # başlangıç dalışa girmeden hemen önce (KAMIKAZE_VIDEO_LEAD_TIME kadar),
@@ -850,13 +860,15 @@ class MainWindow(QMainWindow):
         # Son kaydedilen değerlendirme videosunun yolu (sunucuya gönderim için).
         self._last_eval_video_path = None
         self._param_pending = {}
-        self._param_retry_timer = QTimer(self, interval=PARAM_PUMP_INTERVAL)
+        self._param_retry_timer = QTimer(self)
+        self._param_retry_timer.setInterval(PARAM_PUMP_INTERVAL)
         self._param_retry_timer.timeout.connect(self.__pump_param_queue)
         self._route_plan_signals = RoutePlanSignals(self) #Rota planlama için gerekli sinyaller
         self._route_plan_signals.finished.connect(self._on_route_plan_ready) #Rota planlama bittiğinde çağrılacak fonksiyon
         self._mode_change_cooldown = TimerHoldFixedValue(self)
         self._arm_change_cooldown = TimerHoldFixedValue(self)
-        self._gcs_heartbeat_timer = QTimer(self, interval=1000)
+        self._gcs_heartbeat_timer = QTimer(self)
+        self._gcs_heartbeat_timer.setInterval(1000)
         self._gcs_heartbeat_timer.timeout.connect(self.__send_gcs_heartbeat)
 
         self.current_pilot = MAV_AUTOPILOT_INVALID
@@ -910,13 +922,16 @@ class MainWindow(QMainWindow):
         self.ui.map_view.upload_ads_data.connect(self._on_manual_ads_changed)
         self.ui.actionAbout.triggered.connect(self._about)
         self.ui.actionAbout_Qt.triggered.connect(lambda: QMessageBox.aboutQt(self))
-        self.fence_upload_timout = QTimer(self, singleShot=True, interval=10000)
+        self.fence_upload_timout = QTimer(self, singleShot=True)
+        self.fence_upload_timout.setInterval(10000)
         self.fence_upload_timout.timeout.connect(self.fence_upload_reset)
-        self.fence_download_timout = QTimer(self, singleShot=True, interval=10000)
+        self.fence_download_timout = QTimer(self, singleShot=True)
+        self.fence_download_timout.setInterval(10000)
         self.fence_download_timout.timeout.connect(self.request_fence_data_timeout)
         self.mission_download_retries = 0
         self.waypoint_mission_count = -1
-        self.mission_download_timout = QTimer(self, singleShot=True, interval=1000)
+        self.mission_download_timout = QTimer(self, singleShot=True)
+        self.mission_download_timout.setInterval(1000)
         self.mission_download_timout.timeout.connect(self.request_mission_data_timeout)
         self.ui.download_missions.clicked.connect(self.request_mission_data)
         self.ui.download_fence_data.clicked.connect(self.request_fence_data)
@@ -1223,6 +1238,11 @@ class MainWindow(QMainWindow):
             self.camera_server_connection_dialog.ui.camera_height.setText(self.camera_server_connection_dialog.ui.camera_height.placeholderText())
         if not self.camera_server_connection_dialog.ui.camera_width.text():
             self.camera_server_connection_dialog.ui.camera_width.setText(self.camera_server_connection_dialog.ui.camera_width.placeholderText())
+        # IP alanı boşsa placeholder'daki varsayılanı (PC'nin dinleme adresi
+        # 10.0.0.193:9999) kullan; böylece diyaloğu açıp Connect'e basmak yeterli,
+        # her sefer elle yazmaya gerek yok.
+        if not self.camera_server_connection_dialog.ui.server_ip_input.text():
+            self.camera_server_connection_dialog.ui.server_ip_input.setText(self.camera_server_connection_dialog.ui.server_ip_input.placeholderText())
         ip_and_port = self.camera_server_connection_dialog.ui.server_ip_input.text()
         if ":" in ip_and_port:
             ip_and_port = ip_and_port.split(":")

@@ -50,7 +50,7 @@ class Ui_CameraConfig(object):
 
         self.server_ip_input = QLineEdit(CameraConfig)
         self.server_ip_input.setObjectName(u"server_ip_input")
-        self.server_ip_input.setPlaceholderText(u"192.168.1.25:8000")
+        self.server_ip_input.setPlaceholderText(u"10.0.0.193:9999")
 
         self.server_ip_layout.addWidget(self.server_ip_input)
 
@@ -67,7 +67,7 @@ class Ui_CameraConfig(object):
         self.camera_width = QLineEdit(CameraConfig)
         self.camera_width.setObjectName(u"camera_width")
         self.camera_width.setMaxLength(5)
-        self.camera_width.setPlaceholderText(u"640")
+        self.camera_width.setPlaceholderText(u"1280")
 
         self.camera_width_layout.addWidget(self.camera_width)
 
@@ -84,7 +84,7 @@ class Ui_CameraConfig(object):
         self.camera_height = QLineEdit(CameraConfig)
         self.camera_height.setObjectName(u"camera_height")
         self.camera_height.setMaxLength(5)
-        self.camera_height.setPlaceholderText(u"480")
+        self.camera_height.setPlaceholderText(u"720")
 
         self.camera_height_layout.addWidget(self.camera_height)
 

@@ -162,6 +162,50 @@ class Ardupilot_UAV_Modes(Enum):
     LOITERALTQLAND = (25, 'LOITERALTQLAND', 25)
     AUTOLAND = (26, 'AUTOLAND', 26)
 
+# --- iha_otonom (haberleşme dokümanı §7.1) ----------------------------------
+# Telemetrideki "otonom mu" bayrağı BU tablolardan, yani heartbeat'in
+# custom_mode alanından türetiliyor.
+#
+# base_mode'daki MAV_MODE_FLAG_AUTO_ENABLED (bit 4) KULLANILAMAZ: ArduPilot bu
+# biti hiçbir modda set etmiyor -- kaynağındaki yorumla o bayrak "sistem kendi
+# hedef konumlarını buluyor" demek ve APM bunu böyle bildirmiyor. SITL ölçümü
+# (2026-08-25, ArduPlane): MANUAL ve FBWA base_mode=81, AUTO ve GUIDED
+# base_mode=89 -- aradaki fark AUTO biti değil GUIDED biti (8). MANUAL_IN biti
+# (64) ise RC bağlıyken HER modda açık, o da ayırt edici değil. Bit 4'e bakan
+# eski kod bu yüzden araç AUTO'da uçarken bile sunucuya sabit 0 basıyordu.
+#
+# GUIDED bitine bakmak da mümkündü ama modlar burada açıkça listeleniyor:
+# hangi modun otonom sayıldığı puanlamayı doğrudan etkilediği için görünür ve
+# tek satırda değiştirilebilir olmalı.
+#
+# Ölçüt: seyrüseferi otopilot mu yapıyor? CRUISE ve FBWB dışarıda -- irtifa/yön
+# tutuyorlar ama hedefi pilot veriyor. Q* stabilize/hover/loiter de pilot
+# kumandalı. value[0] custom_mode ile aynı (value[2] mod kutusunda satır gizleme
+# işaretçisi, custom_mode değil).
+ARDUPILOT_AUTONOMOUS_MODES: frozenset[int] = frozenset({
+    Ardupilot_UAV_Modes.CIRCLE.value[0],
+    Ardupilot_UAV_Modes.AUTO.value[0],
+    Ardupilot_UAV_Modes.ReturnToLaunch.value[0],
+    Ardupilot_UAV_Modes.LOITER.value[0],
+    Ardupilot_UAV_Modes.TAKEOFF.value[0],
+    Ardupilot_UAV_Modes.AVOID_ADSB.value[0],
+    Ardupilot_UAV_Modes.GUIDED.value[0],
+    Ardupilot_UAV_Modes.QLAND.value[0],
+    Ardupilot_UAV_Modes.QRTL.value[0],
+    Ardupilot_UAV_Modes.THERMAL.value[0],
+    Ardupilot_UAV_Modes.LOITERALTQLAND.value[0],
+    Ardupilot_UAV_Modes.AUTOLAND.value[0],
+})
+
+# PX4'te ayrım main mode seviyesinde net: AUTO_* alt modlarının tamamı ve
+# OFFBOARD otonom, geri kalanı (MANUAL/ALTCTL/POSCTL/ACRO/STABILIZED) pilot
+# kumandalı. PX4 AUTO_ENABLED bitini doğru set ediyor, yani bu dal eskiden de
+# çalışıyordu; iki otopilot aynı kaynaktan beslensin diye buraya taşındı.
+PX4_AUTONOMOUS_MAIN_MODES: frozenset[int] = frozenset({
+    PX4_CUSTOM_MAIN_MODE.AUTO,
+    PX4_CUSTOM_MAIN_MODE.OFFBOARD,
+})
+
 class SupportedLanguages(Enum):
     English = (0, lambda: QCoreApplication.translate("SupportedLanguages", "English", None), QLocale.Language.English, QLocale.Country.UnitedStates)
     Turkish = (1, lambda: QCoreApplication.translate("SupportedLanguages", "Turkish", None), QLocale.Language.Turkish, QLocale.Country.Turkey)

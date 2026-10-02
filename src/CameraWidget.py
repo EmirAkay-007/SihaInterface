@@ -18,7 +18,13 @@ from src.CommonUtils import KamikazeState
 from src.barcode import RobustDetector, resolve_engine, draw_results
 
 # --- Kamikaze dalış kaydı ---------------------------------------------------
-KAMIKAZE_RECORDING_DIR: str = "kamikaze_kayitlari"
+# Klasör proje köküne sabitli. Göreli bırakılırsa kayıtlar uygulamanın çalışma
+# dizinine düşer, yani arayüzün nereden başlatıldığına göre yer değiştirir
+# (kısayol, IDE run config, paketlenmiş exe). Uçuş sonrası kaydın nerede
+# olduğunu aramak zorunda kalmayalım diye yol tek bir yere çakılıyor.
+KAMIKAZE_RECORDING_DIR: str = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "kamikaze_kayitlari")
 # Akışın gerçek kare hızını önceden bilmenin yolu yok (protokoller bildirmiyor),
 # dosya bu nominal değerle yazılıyor; gerçek hız kayıt biterken loglanıyor.
 # Oynatma hızı tutmuyorsa bunu log'daki ölçülen değere çekin.
@@ -256,7 +262,8 @@ class AbstractProtocolWrapper(QObject):
         self.socket = None
         self._qr_engine = resolve_engine()
         self._qr_detector = RobustDetector(self._qr_engine)
-        self.qr_read_timer = QTimer(self, singleShot=True, interval=2000)
+        self.qr_read_timer = QTimer(self, singleShot=True)
+        self.qr_read_timer.setInterval(2000)
 
     def bindSocket(self) -> None:
         pass
@@ -449,10 +456,11 @@ class ProtocolBerkeSocketWrapper(AbstractProtocolWrapper):
         self.ffmpeg_process.setArguments([
             "-hide_banner",
             "-loglevel", "warning",
-            "-fflags", "nobuffer+discardcorrupt+genpts",
-            "-avioflags", "direct",
+            "-fflags", "discardcorrupt+genpts",
+            "-analyzeduration", "5000000",
+            "-probesize", "5000000",
             "-err_detect", "ignore_err",
-            "-i", f"udp://{self.parentWidget.camera_server_info.ip}:{self.parentWidget.camera_server_info.port}?timeout=2000000&reuse=1&buffer_size=65536",
+            "-i", f"udp://{self.parentWidget.camera_server_info.ip}:{self.parentWidget.camera_server_info.port}?timeout=2000000&reuse=1&overrun_nonfatal=1&buffer_size=2097152",
             "-f", "rawvideo",
             "-pix_fmt", "rgb24",
             "-s", f"{self.parentWidget.camera_server_info.width}x{self.parentWidget.camera_server_info.height}",
@@ -567,7 +575,8 @@ class CameraWidget(QWidget):
         self.label.show()
         self.gridLayout.addWidget(self.label)
 
-        self.reconnect_timer = QTimer(parent=self, singleShot=True, interval=15000)
+        self.reconnect_timer = QTimer(parent=self, singleShot=True)
+        self.reconnect_timer.setInterval(15000)
         self.reconnect_timer.timeout.connect(self.__fire_reconnect)
         self.lock_enabled = False
 

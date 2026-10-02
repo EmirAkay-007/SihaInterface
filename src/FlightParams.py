@@ -45,6 +45,14 @@ HSS_SAFETY_PARAMS: list[tuple[str, list[tuple[bytes, float]]]] = [
     ('WP_RADIUS',        [(b'WP_RADIUS', 30.0)]), #Waypoint Kabul Yarıçapı
     ('TKOFF_THR_MAX',    [(b'TKOFF_THR_MAX', 100.0)]),
     ('TKOFF_THR_MAX_T',  [(b'TKOFF_THR_MAX_T', TAKEOFF_FULL_THROTTLE_TIME)]),
+    # THR_MAX yalnızca otopilotun gazı sürdüğü modlar için bir tavan olmalıydı,
+    # ama ArduPlane onu manuel gazlı modlara da (MANUAL hariç STABILIZE/ACRO/
+    # FBWA) uyguluyor: CRUISE_THR_MAX=60 pilotun kolunu da kesiyordu, FBWA'da
+    # kumanda dibe basılıyken uçak %60 veriyordu. THR_PASS_STAB=1 bu modlarda
+    # gazı doğrudan kumandadan geçirir (THR_MIN/THR_MAX devre dışı) ve GUIDED
+    # ile AUTO'ya hiç dokunmaz -- sağ tık reposition hâlâ CRUISE_THR_MAX ile
+    # uçar. Tavanı 60'tan 100'e çekerek çözmek tam da onu bozardı.
+    ('THR_PASS_STAB',    [(b'THR_PASS_STAB', 1.0)]),
 ]
 
 
@@ -78,8 +86,10 @@ PARAM_MAX_IN_FLIGHT: int = 5       # aynı anda cevabı beklenen yazı sayısı
 PARAM_PUMP_INTERVAL: int = 200     # ms, kuyruğun ne sıklıkta işlendiği
 
 # --- Kamikaze run ----------------------------------------------------------
-# Koşunun tamamı GUIDED'da uçuluyor: otopilot kendi seyrüsefer yaptığı için
-# heartbeat MAV_MODE_FLAG_AUTO_ENABLED bildiriyor ve koşu otonom sayılıyor.
+# Koşunun tamamı GUIDED'da uçuluyor: otopilot kendi seyrüsefer yaptığı için koşu
+# otonom sayılıyor. Bu, GUIDED'ın CommonUtils.ARDUPILOT_AUTONOMOUS_MODES içinde
+# olmasıyla sağlanıyor -- heartbeat'in base_mode bayrakları DEĞİL (ArduPilot
+# MAV_MODE_FLAG_AUTO_ENABLED'ı hiçbir modda set etmiyor; bkz. o tablonun yorumu).
 #
 # Yaklaşma irtifası iki taraftan sıkışık. Alttan: dip toparlanması tek başına
 # (V^2/(g*(n-1)))*(1-cos(DIVE_ANGLE)) ≈ 30 m yiyor. Üstten: irtifa çiti koşu için
