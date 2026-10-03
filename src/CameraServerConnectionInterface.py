@@ -19,3 +19,8 @@ class CameraServerConnectionInterface(QDialog):
         self.ui.camera_width.setValidator(QRegularExpressionValidator(self._port_regex))
         self.ui.camera_height.setValidator(QRegularExpressionValidator(self._port_regex))
 
+        # Varsayılanlar burada: ui_files ayrı bir depo, oradaki .ui dosyasına
+        # dokunmadan değerleri kendi kodumuzda tutuyoruz.
+        self.ui.server_ip_input.setPlaceholderText("10.0.0.193:9999")
+        self.ui.camera_width.setPlaceholderText("1280")
+        self.ui.camera_height.setPlaceholderText("720")
