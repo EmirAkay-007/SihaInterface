@@ -59,6 +59,10 @@ SihaInterface puts all of it in one application built around the team's own work
 - Each phase has its own parameter table; the normal flight envelope is defined once and restored after every run, so a manoeuvre cannot leave the aircraft with altered limits.
 - The run is flown in guided mode, so it counts as autonomous flight.
 
+![Onboard camera view of an autonomous dive in simulation](docs/kamikaze-dive.webp)
+
+*Onboard camera during a dive in ArduPilot SITL and Gazebo. The run starts once the target coordinates have arrived from the server and is refused below 80 m; here the aircraft dives at the target on the runway, pulls out at about 40 m and climbs away. The time stamp in the corner is added by the interface's recorder.*
+
 ### Route planning
 - **Route preplanner** that steers around no-fly zones using a visibility graph and shortest-path search.
 - Resumes a mission from the closest waypoint when entering auto mode.
